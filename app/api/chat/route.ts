@@ -68,6 +68,9 @@ export async function POST(req: NextRequest) {
     tools: [{ type: "web_search_preview" }],
     input: [{ role: "system", content: STAGE1_SYSTEM }, ...messages],
     text: { verbosity: "low" },
+    reasoning: {
+      effort: "low",
+    },
   });
 
   const encoder = new TextEncoder();
