@@ -24,6 +24,8 @@ export default function Chat() {
       if (!planRes.ok) throw new Error("Planner failed");
       const plan = await planRes.json();
 
+      console.log("plan", plan);
+
       const runRes = await fetch("/api/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

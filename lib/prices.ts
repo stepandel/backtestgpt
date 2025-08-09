@@ -1,4 +1,5 @@
 import { env, isDemo } from "@/lib/env";
+import { restClient } from "@polygon.io/client-js";
 
 export type Bar = {
   t: string;
@@ -14,17 +15,14 @@ async function fetchPolygonDaily(
   from: string,
   to: string
 ): Promise<Bar[]> {
-  const url = new URL(
-    `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/day/${from}/${to}`
-  );
-  url.searchParams.set("adjusted", "true");
-  url.searchParams.set("sort", "asc");
-  url.searchParams.set("limit", "5000");
-  url.searchParams.set("apiKey", env.POLYGON_API_KEY!);
-  const res = await fetch(url.toString(), { next: { revalidate: 60 } });
-  if (!res.ok) throw new Error("Polygon daily request failed");
-  const data = await res.json();
-  return (data.results || []).map((r: any) => ({
+  const client = restClient(env.POLYGON_API_KEY || "") as any;
+  const resp = await client.getStocksAggregates(ticker, 1, "day", from, to, {
+    adjusted: true,
+    sort: "asc",
+    limit: 5000,
+  });
+  const results: any[] = (resp as any).results || [];
+  return results.map((r: any) => ({
     t: new Date(r.t).toISOString(),
     o: r.o,
     h: r.h,

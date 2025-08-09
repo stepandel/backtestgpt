@@ -20,16 +20,16 @@ export async function createPlanFromPrompt(prompt: string): Promise<Plan> {
   ) {
     return [
       {
-        ticker: "TSLA",
+        ticker: "KDP",
         entry: {
-          at: "2020-11-16T21:05:00Z",
-          source: "press-release",
-          url: "https://ir.spglobal.com/news-releases/news-details/2020/SP-Dow-Jones-Indices-Announces-December-2020-Quarterly-Rebalance-of-the-SP-500-SP-MidCap-400-and-SP-SmallCap-600/default.aspx",
+          at: "2024-06-07T17:15:00-04:00", // official timestamp from press release
+          source: "S&P DJI press release",
+          url: "https://press.spglobal.com/2024-06-07-S-P-Dow-Jones-Indices-Announces-Quarterly-Rebalance-of-the-S-P-500-and-Other-Indices",
         },
         exit: {
-          at: "2020-12-21T21:00:00Z",
-          source: "exchange-announcement",
-          url: "https://www.nyse.com/article/nyse-closing-auction",
+          at: "2024-06-24T16:00:00-04:00", // NYSE closing auction
+          source: "Exchange closing auction spec (NYSE)",
+          url: "https://www.nyse.com/auctions",
         },
       },
     ];
