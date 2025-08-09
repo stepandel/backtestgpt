@@ -54,43 +54,54 @@ When all entries are gathered and you are ready to finalize, add this message at
 
 export async function POST(req: NextRequest) {
   if (!env.OPENAI_API_KEY) {
-    return new Response(
-      JSON.stringify({
-        content: "Set OPENAI_API_KEY to enable research chat.",
-      }),
-      { status: 200 }
-    );
+    return new Response("Set OPENAI_API_KEY to enable research chat.", {
+      status: 200,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   }
   const json = await req.json();
   const { messages } = Body.parse(json);
 
   const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
-
-  console.log("messages", messages);
-  const response: any = await client.responses.create({
+  const stream = await client.responses.stream({
     model: "gpt-5",
     tools: [{ type: "web_search_preview" }],
     input: [{ role: "system", content: STAGE1_SYSTEM }, ...messages],
-    text: {
-      verbosity: "low",
+    text: { verbosity: "low" },
+  });
+
+  const encoder = new TextEncoder();
+  const rs = new ReadableStream<Uint8Array>({
+    start(controller) {
+      stream.on("event", (evt: any) => {
+        if (
+          evt?.type === "response.output_text.delta" &&
+          typeof evt.delta === "string"
+        ) {
+          controller.enqueue(encoder.encode(evt.delta));
+        }
+        if (evt?.type === "response.output_text.done") {
+          // fallthrough, will be closed on completed
+        }
+        if (evt?.type === "response.completed") {
+          controller.close();
+          stream.done().catch(() => {});
+        }
+      });
+      stream.on("error", (e: any) => controller.error(e));
+    },
+    cancel() {
+      try {
+        stream.done();
+      } catch {}
     },
   });
 
-  // Extract assistant text from Responses API
-  let assistantText = "";
-  const out = response.output ?? [];
-  for (const item of out) {
-    if (item.type === "message" && item.role === "assistant") {
-      for (const c of item.content ?? []) {
-        if (c.type === "output_text" && typeof c.text === "string")
-          assistantText += c.text;
-        if (c.type === "text" && typeof c.text === "string")
-          assistantText += c.text;
-      }
-    }
-    if (item.type === "output_text" && typeof item.text === "string")
-      assistantText += item.text;
-  }
-
-  return Response.json({ content: assistantText || "" });
+  return new Response(rs, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
