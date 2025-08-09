@@ -179,34 +179,44 @@ export async function createPlanFromPrompt(prompt: string): Promise<Plan> {
 
   const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
   try {
-    const response: any = await client.responses.create({
+    const stream = await client.responses.stream({
       model: "gpt-5",
       input: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: prompt },
       ],
       tools: [{ type: "web_search_preview" }, OFFICIAL_EVENT_TOOL as any],
-      // tool_choice: { type: "function", name: "officialEventExtractor" },
     });
 
-    console.log("response", response);
-    const outputs: any[] = response.output ?? [];
-    const toolCallItem = outputs.find(
-      (o: any) => o.type === "tool_call" && o.name === "officialEventExtractor"
-    );
-    if (toolCallItem?.arguments) {
-      return JSON.parse(toolCallItem.arguments) as Plan;
-    }
+    const planPromise = new Promise<Plan>((resolve, reject) => {
+      stream.on("event", (evt: any) => {
+        console.log("evt", evt);
+        if (evt?.name === "officialEventExtractor" && evt?.arguments) {
+          try {
+            const payload = JSON.parse(evt.arguments);
+            const out = (payload?.plan ?? payload) as Plan;
+            resolve(out);
+          } catch (e) {
+            reject(new Error("Failed to parse tool_call arguments as JSON"));
+          }
+        }
+      });
+      stream.on("error", (e: any) => reject(e));
+      stream.on("end", () =>
+        reject(
+          new Error(
+            "No officialEventExtractor tool call found in streamed response"
+          )
+        )
+      );
+    });
 
-    const choiceToolCall = response.choices?.[0]?.message?.tool_calls?.[0];
-    if (
-      choiceToolCall?.function?.name === "officialEventExtractor" &&
-      typeof choiceToolCall.function.arguments === "string"
-    ) {
-      return JSON.parse(choiceToolCall.function.arguments) as Plan;
-    }
-
-    throw new Error("No officialEventExtractor tool call found in response");
+    const plan = await planPromise.finally(async () => {
+      try {
+        await stream.done();
+      } catch {}
+    });
+    return plan;
   } catch (err: any) {
     throw new Error(
       `Planner failed using gpt-5 with web_search_preview: ${
