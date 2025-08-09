@@ -76,22 +76,48 @@ export async function POST(req: NextRequest) {
   const encoder = new TextEncoder();
   const rs = new ReadableStream<Uint8Array>({
     start(controller) {
+      let closed = false;
+      const safeClose = () => {
+        if (!closed) {
+          closed = true;
+          try {
+            controller.close();
+          } catch {}
+          try {
+            stream.done();
+          } catch {}
+        }
+      };
+      const safeError = (e: any) => {
+        if (!closed) {
+          closed = true;
+          try {
+            controller.error(e);
+          } catch {}
+          try {
+            stream.done();
+          } catch {}
+        }
+      };
+
       stream.on("event", (evt: any) => {
         if (
           evt?.type === "response.output_text.delta" &&
-          typeof evt.delta === "string"
+          typeof evt.delta === "string" &&
+          !closed
         ) {
-          controller.enqueue(encoder.encode(evt.delta));
+          try {
+            controller.enqueue(encoder.encode(evt.delta));
+          } catch {}
         }
-        if (evt?.type === "response.output_text.done") {
-          // fallthrough, will be closed on completed
-        }
-        if (evt?.type === "response.completed") {
-          controller.close();
-          stream.done().catch(() => {});
+        if (
+          evt?.type === "response.completed" ||
+          evt?.type === "response.error"
+        ) {
+          safeClose();
         }
       });
-      stream.on("error", (e: any) => controller.error(e));
+      stream.on("error", (e: any) => safeError(e));
     },
     cancel() {
       try {
