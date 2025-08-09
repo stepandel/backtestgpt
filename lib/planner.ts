@@ -225,3 +225,35 @@ export async function createPlanFromPrompt(prompt: string): Promise<Plan> {
     );
   }
 }
+
+// Stage 2: Structure unstructured transcript/content into OFFICIAL_EVENT_TOOL
+export async function structurePlanFromTranscript(
+  transcript: string
+): Promise<Plan> {
+  if (!env.OPENAI_API_KEY)
+    throw new Error("OPENAI_API_KEY required to structure plan");
+  const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+  const response: any = await client.responses.create({
+    model: "gpt-5",
+    tools: [OFFICIAL_EVENT_TOOL as any],
+    tool_choice: { type: "function", name: "officialEventExtractor" },
+    input: [
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "user",
+        content: `Given the following gathered notes/transcript, extract a Plan strictly as per tool schema.\n\n${transcript}`,
+      },
+    ],
+  });
+  const outputs: any[] = response.output ?? [];
+  const toolCallItem = outputs.find(
+    (o: any) => o.type === "tool_call" && o.name === "officialEventExtractor"
+  );
+  if (toolCallItem?.arguments) {
+    const parsed = JSON.parse(toolCallItem.arguments);
+    return (parsed?.plan ?? parsed) as Plan;
+  }
+  throw new Error(
+    "No officialEventExtractor tool call in structuring response"
+  );
+}
