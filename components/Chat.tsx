@@ -16,26 +16,44 @@ export default function Chat() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!prompt.trim()) return;
     setLoading(true);
+    const userMessage = { role: "user" as const, content: prompt };
+    setMessages((prev) => [...prev, userMessage]);
+    setPrompt("");
     try {
       const chatRes = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...messages, { role: "user", content: prompt }],
-        }),
+        body: JSON.stringify({ messages: [...messages, userMessage] }),
       });
-      if (!chatRes.ok) throw new Error("Chat failed");
-      const data = await chatRes.json();
-      const assistant = data.content as string;
-      const nextMsgs: { role: "user" | "assistant"; content: string }[] = [
-        ...messages,
-        { role: "user", content: prompt },
-        { role: "assistant", content: assistant },
-      ];
-      setMessages(nextMsgs);
-      setReady(/ready to finalize plan/i.test(assistant));
-      setPrompt("");
+      if (!chatRes.ok || !chatRes.body) throw new Error("Chat failed");
+      const reader = chatRes.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantText = "";
+      // create streaming assistant message placeholder
+      let assistantIndex = -1;
+      setMessages((prev) => {
+        assistantIndex = prev.length;
+        return [...prev, { role: "assistant", content: "" }];
+      });
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        assistantText += chunk;
+        const text = assistantText;
+        setMessages((prev) => {
+          const next = [...prev];
+          // Ensure last message is assistant placeholder
+          const idx = assistantIndex >= 0 ? assistantIndex : prev.length - 1;
+          if (next[idx] && next[idx].role === "assistant") {
+            next[idx] = { role: "assistant", content: text };
+          }
+          return next;
+        });
+      }
+      setReady(/ready to finalize plan/i.test(assistantText));
     } catch (err: any) {
       setError(err?.message ?? "Unknown error");
     } finally {
@@ -98,10 +116,23 @@ export default function Chat() {
         {error && <span className="text-sm text-destructive">{error}</span>}
       </div>
       {messages.length > 0 && (
-        <div className="mt-4 space-y-2 text-sm">
+        <div className="mt-4 space-y-3 text-sm">
           {messages.map((m, i) => (
-            <div key={i} className="whitespace-pre-wrap">
-              <span className="font-medium">{m.role}:</span> {m.content}
+            <div
+              key={i}
+              className={`flex ${
+                m.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
+              <div
+                className={`max-w-[85%] rounded-md px-3 py-2 whitespace-pre-wrap ${
+                  m.role === "user"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-foreground"
+                }`}
+              >
+                {m.content}
+              </div>
             </div>
           ))}
         </div>
