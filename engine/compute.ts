@@ -35,10 +35,9 @@ export async function runBacktest(plan: Plan) {
 
   const perTicker = determineDailyExecution(plan, prices);
 
-  const totalReturn = perTicker.reduce((s, r) => s + r.pctReturn, 0);
-  const hitRate = perTicker.length
-    ? perTicker.filter((r) => r.pctReturn > 0).length / perTicker.length
-    : 0;
+  const positiveCount = perTicker.filter((r) => r.pctReturn > 0).length;
+  const negativeCount = perTicker.length - positiveCount;
+  const hitRate = perTicker.length ? positiveCount / perTicker.length : 0;
   const sorted = [...perTicker].map((r) => r.pctReturn).sort((a, b) => a - b);
   const mean = perTicker.length
     ? sorted.reduce((a, b) => a + b, 0) / perTicker.length
@@ -58,7 +57,7 @@ export async function runBacktest(plan: Plan) {
 
   return {
     perTicker,
-    stats: { totalReturn, hitRate, mean, median },
+    stats: { hitRate, mean, median, pos: positiveCount, neg: negativeCount },
     equityCurve: curve,
   };
 }
