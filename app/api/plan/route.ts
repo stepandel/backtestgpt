@@ -10,5 +10,6 @@ export async function POST(req: NextRequest) {
   const json = await req.json();
   const { transcript } = Body.parse(json);
   const plan = await structurePlanFromTranscript(transcript);
+  console.log("plan", plan);
   return Response.json(plan);
 }

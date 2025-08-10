@@ -20,28 +20,32 @@ export function determineDailyExecution(
     const series = prices[item.ticker] || [];
     if (!series.length) continue;
 
-    // Entry rule: if timestamp is same-day premarket/unknown, use that day open; otherwise use next day open.
+    // Entry: first bar on or after the entry day (UTC day match)
     const entryDate = item.entry.at
       ? new Date(item.entry.at)
       : new Date(series[0].t);
-    const entryDayISO = new Date(entryDate.toISOString().slice(0, 10));
-    const entryIdx = series.findIndex(
-      (b) => b.t.slice(0, 10) === entryDayISO.toISOString().slice(0, 10)
+    const entryDayUTC = entryDate.toISOString().slice(0, 10);
+    let effectiveEntryIdx = series.findIndex(
+      (b) => b.t.slice(0, 10) >= entryDayUTC
     );
-    const effectiveEntryIdx = Math.max(0, entryIdx);
+    if (effectiveEntryIdx === -1) effectiveEntryIdx = 0;
     const entryBar = series[effectiveEntryIdx];
     const entryPrice = entryBar.o;
 
-    // Exit rule: use that day's close. If exit earlier than entry, skip.
+    // Exit: last bar on or before exit day (UTC day match)
     const exitDate = item.exit.at
       ? new Date(item.exit.at)
       : new Date(series[series.length - 1].t);
-    const exitDayISO = new Date(exitDate.toISOString().slice(0, 10));
-    let exitIdx = series.findIndex(
-      (b) => b.t.slice(0, 10) === exitDayISO.toISOString().slice(0, 10)
-    );
-    if (exitIdx < effectiveEntryIdx) continue;
+    const exitDayUTC = exitDate.toISOString().slice(0, 10);
+    let exitIdx = -1;
+    for (let i = series.length - 1; i >= 0; i--) {
+      if (series[i].t.slice(0, 10) <= exitDayUTC) {
+        exitIdx = i;
+        break;
+      }
+    }
     if (exitIdx === -1) exitIdx = series.length - 1;
+    if (exitIdx < effectiveEntryIdx) continue;
     const exitBar = series[exitIdx];
     const exitPrice = exitBar.c;
 

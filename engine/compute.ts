@@ -1,5 +1,5 @@
 import { determineDailyExecution, type Execution } from "@/engine/strategy";
-import { getHourlyBars } from "@/lib/prices";
+import { getHourlyBars, getDailyBars } from "@/lib/prices";
 import type { Plan } from "@/lib/planner";
 
 export async function runBacktest(plan: Plan) {
@@ -24,7 +24,12 @@ export async function runBacktest(plan: Plan) {
   const prices: Record<string, Awaited<ReturnType<typeof getHourlyBars>>> = {};
   await Promise.all(
     tickers.map(async (t) => {
-      prices[t] = await getHourlyBars(t, from, to);
+      try {
+        const hrs = await getHourlyBars(t, from, to);
+        prices[t] = hrs.length ? hrs : await getDailyBars(t, from, to);
+      } catch {
+        prices[t] = await getDailyBars(t, from, to);
+      }
     })
   );
 
