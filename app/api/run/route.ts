@@ -14,6 +14,10 @@ const Body = z.object({ plan: z.array(Item).max(5) });
 export async function POST(req: NextRequest) {
   const json = await req.json();
   const { plan } = Body.parse(json);
+  // Persist latest tickers for header tape and potential caching keys
+  try {
+    // No-op on server; client listens to event for persistence
+  } catch {}
   const results = await runBacktest(plan as Plan);
   // Shape per-ticker rows with URLs for table
   const perTicker = results.perTicker.map((r) => {

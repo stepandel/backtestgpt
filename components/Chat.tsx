@@ -151,6 +151,7 @@ export default function Chat() {
       localStorage.removeItem("chat:messages");
       localStorage.removeItem("chat:ready");
       localStorage.removeItem("backtest:data");
+      localStorage.removeItem("prices:cache");
     } catch {}
     setMessages([]);
     setPrompt("");

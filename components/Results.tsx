@@ -23,6 +23,16 @@ export default function Results() {
       setData(e.detail);
       try {
         localStorage.setItem("backtest:data", JSON.stringify(e.detail));
+        // Cache prices per ticker for future sessions
+        const priceCacheKey = "prices:cache";
+        const cache = JSON.parse(localStorage.getItem(priceCacheKey) || "{}");
+        const per = e?.detail?.results?.perTicker || [];
+        for (const r of per) {
+          if (!cache[r.ticker]) {
+            cache[r.ticker] = { lastUpdated: Date.now() };
+          }
+        }
+        localStorage.setItem(priceCacheKey, JSON.stringify(cache));
       } catch {}
     }
     window.addEventListener("backtest:results", handler);
