@@ -1,6 +1,5 @@
 // @ts-nocheck
-import Chat from "../components/Chat";
-import Results from "../components/Results";
+import Shell from "../components/Shell";
 import { DollarSign, LineChart, RefreshCw } from "lucide-react";
 
 export default function Page() {
@@ -37,14 +36,7 @@ export default function Page() {
           </div>
         </div>
       </header>
-      <div className="grid grid-cols-12 gap-2 md:gap-3">
-        <div className="col-span-12 md:col-span-4 rounded-md border h-[calc(100vh-200px)] overflow-hidden">
-          <Chat />
-        </div>
-        <div className="col-span-12 md:col-span-8 rounded-md border p-2 md:p-3 h-[calc(100vh-200px)] overflow-auto">
-          <Results />
-        </div>
-      </div>
+      <Shell />
     </main>
   );
 }
