@@ -183,9 +183,14 @@ export async function POST(req: NextRequest) {
           !closed
         ) {
           try {
-            const query = evt?.item?.action?.query;
-            if (typeof query === "string" && query.length > 0) {
-              controller.enqueue(encoder.encode(`[[S:QUERY]]${query}`));
+            const action = evt?.item?.action ?? {};
+            let q: any =
+              action.query ?? action.arguments?.query ?? action.args?.query;
+            if (q && typeof q !== "string") {
+              q = q.text ?? q.value ?? q.query ?? null;
+            }
+            if (typeof q === "string" && q.trim().length > 0) {
+              controller.enqueue(encoder.encode(`[[S:QUERY]]${q}`));
             }
             controller.enqueue(encoder.encode("[[S:END]]"));
           } catch {}

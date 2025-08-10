@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
@@ -22,6 +22,7 @@ export default function Chat() {
     "in_progress" | "searching" | "completed" | null
   >(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const searchClearTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     try {
@@ -189,14 +190,25 @@ export default function Chat() {
             buffer = buffer.slice("[[S:BEGIN]]".length);
             setSearchActive(true);
             setSearchStatus("in_progress");
+            if (searchClearTimeoutRef.current) {
+              clearTimeout(searchClearTimeoutRef.current);
+              searchClearTimeoutRef.current = null;
+            }
             setSearchQuery("");
             return true;
           }
           if (which === "SEND") {
             buffer = buffer.slice("[[S:END]]".length);
             setSearchActive(false);
-            setSearchStatus(null);
-            setSearchQuery("");
+            // Keep last known status/query briefly so the user can see it
+            if (searchClearTimeoutRef.current) {
+              clearTimeout(searchClearTimeoutRef.current);
+            }
+            searchClearTimeoutRef.current = window.setTimeout(() => {
+              setSearchStatus(null);
+              setSearchQuery("");
+              searchClearTimeoutRef.current = null;
+            }, 1500);
             return true;
           }
           if (which === "S_IN_PROGRESS") {
@@ -288,6 +300,11 @@ export default function Chat() {
       setReasoning("");
       setReasoningActive(false);
       setSearchActive(false);
+      // Clear search indicators shortly after completion if still pending
+      if (searchClearTimeoutRef.current) {
+        clearTimeout(searchClearTimeoutRef.current);
+        searchClearTimeoutRef.current = null;
+      }
       setSearchStatus(null);
       setSearchQuery("");
       try {
@@ -354,14 +371,17 @@ export default function Chat() {
   return (
     <div className="h-full flex flex-col">
       <div className="flex-1 overflow-auto p-4 bg-gradient-to-b from-transparent via-zinc-900/20 to-zinc-900/40">
-        {(reasoningActive || searchActive) && (
+        {(reasoningActive ||
+          searchActive ||
+          searchStatus !== null ||
+          searchQuery) && (
           <div className="mb-3 text-xs text-muted-foreground space-y-1">
             {reasoningActive && (
               <div>
                 <span className="font-medium">Reasoning</span>: {reasoning}
               </div>
             )}
-            {searchActive && (
+            {(searchActive || searchStatus !== null || searchQuery) && (
               <div>
                 <span className="font-medium">Web search</span>
                 {searchStatus ? ` — ${searchStatus}` : ""}
