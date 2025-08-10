@@ -10,8 +10,8 @@ export type PlanItem = {
 export type Plan = PlanItem[];
 
 export const OFFICIAL_EVENT_TOOL = {
-  name: "officialEventExtractor",
   type: "function",
+  name: "officialEventExtractor",
   description:
     "Extracts trading plan data from a user strategy prompt, enriched with official source dates for entry/exit.",
   parameters: {
@@ -76,6 +76,84 @@ export const OFFICIAL_EVENT_TOOL = {
   },
 } as const;
 
+// export const OFFICIAL_EVENT_TOOL = {
+//   type: "function",
+//   name: "officialEventExtractor",
+//   function: {
+//     description:
+//       "Extracts trading plan data from a user strategy prompt, enriched with official source dates for entry/exit.",
+//     strict: true,
+//     parameters: {
+//       type: "object",
+//       additionalProperties: false,
+//       properties: {
+//         plan: {
+//           type: "array",
+//           description:
+//             "Array of tickers with official entry/exit data for backtesting.",
+//           items: {
+//             type: "object",
+//             additionalProperties: false,
+//             properties: {
+//               ticker: {
+//                 type: "string",
+//                 description: "Stock ticker symbol.",
+//               },
+//               entry: {
+//                 type: "object",
+//                 additionalProperties: false,
+//                 properties: {
+//                   at: {
+//                     type: "string",
+//                     description:
+//                       "Entry timestamp in ISO8601 with offset (America/New_York).",
+//                     pattern:
+//                       "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}([-+]\\d{2}:\\d{2}|Z)$",
+//                   },
+//                   source: {
+//                     type: "string",
+//                     description:
+//                       "Name of the publication/organization (e.g., 'S&P Dow Jones Indices', 'NYSE').",
+//                   },
+//                   url: {
+//                     type: "string",
+//                     description: "Official source URL for the entry event.",
+//                   },
+//                 },
+//                 required: ["at"],
+//               },
+//               exit: {
+//                 type: "object",
+//                 additionalProperties: false,
+//                 properties: {
+//                   at: {
+//                     type: "string",
+//                     description:
+//                       "Exit timestamp in ISO8601 with offset (America/New_York).",
+//                     pattern:
+//                       "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}([-+]\\d{2}:\\d{2}|Z)$",
+//                   },
+//                   source: {
+//                     type: "string",
+//                     description: "Name of the publication/organization.",
+//                   },
+//                   url: {
+//                     type: "string",
+//                     description: "Official source URL for the exit event.",
+//                   },
+//                 },
+//                 required: ["at"],
+//               },
+//             },
+//             required: ["ticker", "entry", "exit"],
+//           },
+//         },
+//       },
+//       required: ["plan"],
+//     },
+//   },
+// } as const;
+
 const SYSTEM_PROMPT = `
 You convert a research draft into a deterministic trading plan.
 
@@ -116,7 +194,7 @@ export async function structurePlanFromTranscript(
   const response = await client.responses.create({
     prompt: {
       id: "pmpt_6897e44cf814819481c080c9a3d275d80e2bae4d4ff8c75d",
-      version: "1",
+      version: "4",
     },
     input: [
       {
