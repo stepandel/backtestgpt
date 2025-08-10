@@ -1,5 +1,4 @@
 import { env } from "@/lib/env";
-import openai from "openai";
 import OpenAI from "openai";
 
 export type PlanItem = {
@@ -76,84 +75,6 @@ export const OFFICIAL_EVENT_TOOL = {
   },
 } as const;
 
-// export const OFFICIAL_EVENT_TOOL = {
-//   type: "function",
-//   name: "officialEventExtractor",
-//   function: {
-//     description:
-//       "Extracts trading plan data from a user strategy prompt, enriched with official source dates for entry/exit.",
-//     strict: true,
-//     parameters: {
-//       type: "object",
-//       additionalProperties: false,
-//       properties: {
-//         plan: {
-//           type: "array",
-//           description:
-//             "Array of tickers with official entry/exit data for backtesting.",
-//           items: {
-//             type: "object",
-//             additionalProperties: false,
-//             properties: {
-//               ticker: {
-//                 type: "string",
-//                 description: "Stock ticker symbol.",
-//               },
-//               entry: {
-//                 type: "object",
-//                 additionalProperties: false,
-//                 properties: {
-//                   at: {
-//                     type: "string",
-//                     description:
-//                       "Entry timestamp in ISO8601 with offset (America/New_York).",
-//                     pattern:
-//                       "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}([-+]\\d{2}:\\d{2}|Z)$",
-//                   },
-//                   source: {
-//                     type: "string",
-//                     description:
-//                       "Name of the publication/organization (e.g., 'S&P Dow Jones Indices', 'NYSE').",
-//                   },
-//                   url: {
-//                     type: "string",
-//                     description: "Official source URL for the entry event.",
-//                   },
-//                 },
-//                 required: ["at"],
-//               },
-//               exit: {
-//                 type: "object",
-//                 additionalProperties: false,
-//                 properties: {
-//                   at: {
-//                     type: "string",
-//                     description:
-//                       "Exit timestamp in ISO8601 with offset (America/New_York).",
-//                     pattern:
-//                       "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}([-+]\\d{2}:\\d{2}|Z)$",
-//                   },
-//                   source: {
-//                     type: "string",
-//                     description: "Name of the publication/organization.",
-//                   },
-//                   url: {
-//                     type: "string",
-//                     description: "Official source URL for the exit event.",
-//                   },
-//                 },
-//                 required: ["at"],
-//               },
-//             },
-//             required: ["ticker", "entry", "exit"],
-//           },
-//         },
-//       },
-//       required: ["plan"],
-//     },
-//   },
-// } as const;
-
 const SYSTEM_PROMPT = `
 You convert a research draft into a deterministic trading plan.
 
@@ -187,28 +108,46 @@ Rules:
 export async function structurePlanFromTranscript(
   transcript: string
 ): Promise<Plan> {
-  console.log("transcript", transcript);
   if (!env.OPENAI_API_KEY)
     throw new Error("OPENAI_API_KEY required to structure plan");
   const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
-  const response = await client.responses.create({
-    prompt: {
-      id: "pmpt_6897e44cf814819481c080c9a3d275d80e2bae4d4ff8c75d",
-      version: "4",
-    },
+  const response: any = await client.responses.create({
+    model: "gpt-5-mini",
+    tools: [OFFICIAL_EVENT_TOOL as any],
+    tool_choice: { type: "function", name: "officialEventExtractor" },
     input: [
+      { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
-        content: JSON.stringify(transcript),
+        content: `Given the following gathered transcript, extract a Plan strictly via a single call to officialEventExtractor.\n\n${transcript}`,
       },
     ],
   });
+  console.log("response", response);
   const outputs: any[] = response.output ?? [];
+  // Accept either 'function_call' (Responses API) or legacy 'tool_call'
+  const fnCallItem = outputs.find(
+    (o: any) =>
+      o.type === "function_call" && o.name === "officialEventExtractor"
+  );
+  if (fnCallItem?.arguments) {
+    const parsed = JSON.parse(fnCallItem.arguments);
+    return (parsed?.plan ?? parsed) as Plan;
+  }
   const toolCallItem = outputs.find(
     (o: any) => o.type === "tool_call" && o.name === "officialEventExtractor"
   );
   if (toolCallItem?.arguments) {
     const parsed = JSON.parse(toolCallItem.arguments);
+    return (parsed?.plan ?? parsed) as Plan;
+  }
+  // Fallback parse path for SDKs that surface choices-like shape
+  const choiceToolCall = response.choices?.[0]?.message?.tool_calls?.[0];
+  if (
+    choiceToolCall?.function?.name === "officialEventExtractor" &&
+    typeof choiceToolCall.function.arguments === "string"
+  ) {
+    const parsed = JSON.parse(choiceToolCall.function.arguments);
     return (parsed?.plan ?? parsed) as Plan;
   }
   throw new Error(
