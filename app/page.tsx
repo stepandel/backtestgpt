@@ -1,6 +1,7 @@
 // @ts-nocheck
 import Shell from "../components/Shell";
 import { DollarSign, LineChart, RefreshCw } from "lucide-react";
+import TickerTape from "../components/TickerTape";
 
 export default function Page() {
   return (
@@ -22,18 +23,8 @@ export default function Page() {
             <LineChart className="h-4 w-4" /> Markets open 9:30–16:00 ET
           </div>
         </div>
-        <div className="relative overflow-hidden rounded-md border bg-background/40">
-          <div className="animate-[ticker_40s_linear_infinite] whitespace-nowrap py-2 px-3 text-xs text-muted-foreground">
-            <span className="mx-6">
-              S&P 500 rebalances drive index-add flows…
-            </span>
-            <span className="mx-6">
-              Use official S&P DJI press releases for dates…
-            </span>
-            <span className="mx-6">
-              Auction exits default to exchange closing cross…
-            </span>
-          </div>
+        <div className="relative overflow-hidden rounded-md border bg-background/40 text-muted-foreground">
+          <TickerTape />
         </div>
       </header>
       <Shell />
