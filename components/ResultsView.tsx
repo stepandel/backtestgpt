@@ -2,15 +2,18 @@ import StatsCards from "@/components/StatsCards";
 import EquityCurve from "@/components/Charts/EquityCurve";
 import Table from "@/components/Table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BacktestResults, BacktestPlan } from "@/types";
 
-type ResultsData = {
-  stats: {
-    hitRate: number;
-    mean: number;
-    median: number;
-    pos?: number;
-    neg?: number;
-  };
+type StatsDisplay = {
+  hitRate: number;
+  mean: number;
+  median: number;
+  pos?: number;
+  neg?: number;
+};
+
+type ResultsDisplay = {
+  stats: StatsDisplay;
   equityCurve: { t: string; v: number }[];
   perTicker: any[];
 };
@@ -19,8 +22,8 @@ export default function ResultsView({
   plan,
   results,
 }: {
-  plan: any[];
-  results: ResultsData;
+  plan: BacktestPlan[];
+  results: ResultsDisplay;
 }) {
   return (
     <div className="space-y-6">

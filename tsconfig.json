@@ -20,7 +20,9 @@
     "paths": {
       "@/components/*": ["components/*"],
       "@/lib/*": ["lib/*"],
-      "@/engine/*": ["engine/*"]
+      "@/engine/*": ["engine/*"],
+      "@/hooks/*": ["hooks/*"],
+      "@/types": ["types/index"]
     },
     "allowJs": true,
     "esModuleInterop": true

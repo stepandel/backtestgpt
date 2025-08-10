@@ -1,3 +1,5 @@
+import { formatPercent } from "@/lib/formatters";
+
 export default function Histogram({ returns }: { returns: number[] }) {
   if (!returns?.length) return null;
 
@@ -37,7 +39,6 @@ export default function Histogram({ returns }: { returns: number[] }) {
     return { x, y, w: Math.max(0, barW - 2), h: barH, c };
   });
 
-  const fmtPct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64">
@@ -105,7 +106,7 @@ export default function Histogram({ returns }: { returns: number[] }) {
         textAnchor="start"
         fill="hsl(var(--muted-foreground))"
       >
-        {fmtPct(minVal)}
+        {formatPercent(minVal, 1)}
       </text>
       <text
         x={width - margin.right}
@@ -114,7 +115,7 @@ export default function Histogram({ returns }: { returns: number[] }) {
         textAnchor="end"
         fill="hsl(var(--muted-foreground))"
       >
-        {fmtPct(maxVal)}
+        {formatPercent(maxVal, 1)}
       </text>
     </svg>
   );

@@ -1,3 +1,5 @@
+import { formatPercent, formatCurrency } from "@/lib/formatters";
+
 type Row = {
   ticker: string;
   entryAt: string;
@@ -81,9 +83,9 @@ export default function Table({ rows }: { rows: Row[] }) {
                   fmtDate(r.exitAt)
                 )}
               </td>
-              <td className="py-2">{fmt(r.entryPrice)}</td>
-              <td className="py-2">{fmt(r.exitPrice)}</td>
-              <td className="py-2">{fmtPct(r.pctReturn)}</td>
+              <td className="py-2">{formatCurrency(r.entryPrice)}</td>
+              <td className="py-2">{formatCurrency(r.exitPrice)}</td>
+              <td className="py-2">{formatPercent(r.pctReturn)}</td>
               <td className="py-2">{r.days.toFixed(1)}</td>
             </tr>
           ))}
