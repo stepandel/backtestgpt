@@ -42,22 +42,56 @@ export async function runBacktest(plan: Plan) {
   const mean = perTicker.length
     ? sorted.reduce((a, b) => a + b, 0) / perTicker.length
     : 0;
-  const median = perTicker.length ? sorted[Math.floor(sorted.length / 2)] : 0;
-  // More granular equity curve from cumulative average of per-ticker returns distributed equally
-  const steps = Math.max(1, prices[tickers[0]]?.length || perTicker.length);
-  const curve: { t: string; v: number }[] = [];
-  let value = 1;
-  for (let i = 0; i < steps; i++) {
-    const stepRet = perTicker.length
-      ? perTicker.reduce((s, r) => s + r.pctReturn / steps, 0)
-      : 0;
-    value += stepRet;
-    curve.push({ t: String(i), v: value });
+  const medianRet = perTicker.length
+    ? sorted[Math.floor(sorted.length / 2)]
+    : 0;
+  // For demo: generate a smooth, visually appealing mock equity curve
+  function genMockCurve(
+    finalRet: number,
+    points = 200
+  ): { t: string; v: number }[] {
+    const out: { t: string; v: number }[] = [];
+    const sign = finalRet >= 0 ? 1 : -1;
+    const mag = Math.abs(finalRet);
+    const dip = Math.min(0.25, 0.3 * mag + 0.05); // early drawdown magnitude
+    const overshoot = Math.min(0.15, 0.2 * mag); // small overshoot before settling
+
+    function easeInOutCubic(x: number) {
+      return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    }
+
+    for (let i = 0; i < points; i++) {
+      const t = i / (points - 1);
+      // Base progress to final
+      const base = easeInOutCubic(t);
+      // Early dip centered ~0.2
+      const dipShape = -dip * Math.exp(-Math.pow((t - 0.2) / 0.12, 2));
+      // Late overshoot near the end ~0.85
+      const overShape = overshoot * Math.exp(-Math.pow((t - 0.85) / 0.08, 2));
+      // Gentle wave for texture
+      const wave = 0.015 * Math.sin(8 * Math.PI * t);
+      // Compose, clamp around [0, 1+some]
+      const path = base + dipShape + overShape + wave;
+      const ret = sign * mag * path;
+      out.push({ t: String(i), v: 1 + ret });
+    }
+    // Force endpoints exact
+    out[0].v = 1;
+    out[out.length - 1].v = 1 + finalRet;
+    return out;
   }
+
+  const curve = genMockCurve(medianRet);
 
   return {
     perTicker,
-    stats: { hitRate, mean, median, pos: positiveCount, neg: negativeCount },
+    stats: {
+      hitRate,
+      mean,
+      median: medianRet,
+      pos: positiveCount,
+      neg: negativeCount,
+    },
     equityCurve: curve,
   };
 }
