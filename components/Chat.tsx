@@ -93,48 +93,55 @@ export default function Chat() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3">
-      <Textarea
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        placeholder="Describe your strategy with explicit entry and exit rules..."
-      />
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={loading}>
-          {loading ? "Thinking…" : "Send"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={loading || !ready}
-          onClick={onFinalize}
-        >
-          {ready ? "Finalize Plan" : "Continue Chat"}
-        </Button>
-        {error && <span className="text-sm text-destructive">{error}</span>}
-      </div>
-      {messages.length > 0 && (
-        <div className="mt-4 space-y-3 text-sm">
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              className={`flex ${
-                m.role === "user" ? "justify-end" : "justify-start"
-              }`}
-            >
+    <div className="h-full flex flex-col">
+      <div className="flex-1 overflow-auto p-4">
+        {messages.length > 0 && (
+          <div className="space-y-3 text-sm">
+            {messages.map((m, i) => (
               <div
-                className={`max-w-[85%] rounded-md px-3 py-2 whitespace-pre-wrap ${
-                  m.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-foreground"
+                key={i}
+                className={`flex ${
+                  m.role === "user" ? "justify-end" : "justify-start"
                 }`}
               >
-                {m.content}
+                <div
+                  className={`max-w-[85%] rounded-md px-3 py-2 whitespace-pre-wrap ${
+                    m.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-foreground"
+                  }`}
+                >
+                  {m.content}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+        )}
+      </div>
+      <form
+        onSubmit={onSubmit}
+        className="border-t p-3 flex items-center gap-3"
+      >
+        <Textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Describe your strategy with explicit entry and exit rules..."
+        />
+        <div className="flex items-center gap-2">
+          <Button type="submit" disabled={loading}>
+            {loading ? "Thinking…" : "Send"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loading || !ready}
+            onClick={onFinalize}
+          >
+            {ready ? "Finalize Plan" : "Continue Chat"}
+          </Button>
         </div>
-      )}
-    </form>
+        {error && <span className="text-sm text-destructive">{error}</span>}
+      </form>
+    </div>
   );
 }
