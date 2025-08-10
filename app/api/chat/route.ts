@@ -113,6 +113,7 @@ export async function POST(req: NextRequest) {
 
       stream.on("event", (evt: any) => {
         console.log("evt", evt);
+        // Output text deltas → pass through
         if (
           evt?.type === "response.output_text.delta" &&
           typeof evt.delta === "string" &&
@@ -120,6 +121,73 @@ export async function POST(req: NextRequest) {
         ) {
           try {
             controller.enqueue(encoder.encode(evt.delta));
+          } catch {}
+        }
+        // Reasoning deltas → tag for client-side ephemeral display
+        if (
+          evt?.type === "response.reasoning.delta" &&
+          typeof evt.delta === "string" &&
+          !closed
+        ) {
+          try {
+            controller.enqueue(encoder.encode(`[[R]]${evt.delta}`));
+          } catch {}
+        }
+        // Reasoning lifecycle markers via output_item events
+        if (
+          evt?.type === "response.output_item.added" &&
+          evt?.item?.type === "reasoning" &&
+          !closed
+        ) {
+          try {
+            controller.enqueue(encoder.encode("[[R:BEGIN]]"));
+          } catch {}
+        }
+        if (
+          evt?.type === "response.output_item.done" &&
+          evt?.item?.type === "reasoning" &&
+          !closed
+        ) {
+          try {
+            controller.enqueue(encoder.encode("[[R:END]]"));
+          } catch {}
+        }
+        // Web search lifecycle and status
+        if (
+          evt?.type === "response.output_item.added" &&
+          evt?.item?.type === "web_search_call" &&
+          !closed
+        ) {
+          try {
+            controller.enqueue(encoder.encode("[[S:BEGIN]]"));
+          } catch {}
+        }
+        if (evt?.type === "response.web_search_call.in_progress" && !closed) {
+          try {
+            controller.enqueue(encoder.encode("[[S:STATUS:in_progress]]"));
+          } catch {}
+        }
+        if (evt?.type === "response.web_search_call.searching" && !closed) {
+          try {
+            controller.enqueue(encoder.encode("[[S:STATUS:searching]]"));
+          } catch {}
+        }
+        if (evt?.type === "response.web_search_call.completed" && !closed) {
+          try {
+            controller.enqueue(encoder.encode("[[S:STATUS:completed]]"));
+          } catch {}
+        }
+        if (
+          evt?.type === "response.output_item.done" &&
+          evt?.item?.type === "web_search_call" &&
+          !closed
+        ) {
+          try {
+            const query = evt?.item?.action?.query;
+            if (typeof query === "string" && query.length > 0) {
+              controller.enqueue(encoder.encode(`[[S:QUERY]]${query}`));
+            }
+            controller.enqueue(encoder.encode("[[S:END]]"));
           } catch {}
         }
         if (

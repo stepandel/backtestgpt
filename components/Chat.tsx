@@ -15,6 +15,13 @@ export default function Chat() {
     { role: "user" | "assistant"; content: string }[]
   >([]);
   const [ready, setReady] = useState(false);
+  const [reasoning, setReasoning] = useState("");
+  const [reasoningActive, setReasoningActive] = useState(false);
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchStatus, setSearchStatus] = useState<
+    "in_progress" | "searching" | "completed" | null
+  >(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     try {
@@ -64,6 +71,7 @@ export default function Chat() {
       const reader = chatRes.body.getReader();
       const decoder = new TextDecoder();
       let assistantText = "";
+      let buffer = "";
       // create streaming assistant message placeholder
       let assistantIndex = -1;
       setMessages((prev: { role: "user" | "assistant"; content: string }[]) => {
@@ -80,28 +88,208 @@ export default function Chat() {
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        assistantText += chunk;
-        const text = assistantText;
-        setMessages(
-          (prev: { role: "user" | "assistant"; content: string }[]) => {
-            const next: { role: "user" | "assistant"; content: string }[] = [
-              ...prev,
-            ];
-            // Ensure last message is assistant placeholder
-            const idx = assistantIndex >= 0 ? assistantIndex : prev.length - 1;
-            if (next[idx] && next[idx].role === "assistant") {
-              next[idx] = { role: "assistant", content: text };
+        buffer += decoder.decode(value, { stream: true });
+        // Process buffer for markers and normal text
+        // Supported tokens:
+        // - Reasoning: [[R]]<delta>, [[R:BEGIN]], [[R:END]]
+        // - Search: [[S:BEGIN]], [[S:END]], [[S:QUERY]]<query>,
+        //           [[S:STATUS:in_progress|searching|completed]]
+        // Loop until no markers remain
+        // Helper to update assistant message text
+        const pushAssistant = (text: string) => {
+          setMessages(
+            (prev: { role: "user" | "assistant"; content: string }[]) => {
+              const next: { role: "user" | "assistant"; content: string }[] = [
+                ...prev,
+              ];
+              const idx =
+                assistantIndex >= 0 ? assistantIndex : prev.length - 1;
+              if (next[idx] && next[idx].role === "assistant") {
+                next[idx] = { role: "assistant", content: text };
+              }
+              try {
+                localStorage.setItem("chat:messages", JSON.stringify(next));
+              } catch {}
+              return next;
             }
-            try {
-              localStorage.setItem("chat:messages", JSON.stringify(next));
-            } catch {}
-            return next;
+          );
+        };
+
+        const processMarkers = () => {
+          // Find earliest marker occurrence
+          const idxBegin = buffer.indexOf("[[R:BEGIN]]");
+          const idxEnd = buffer.indexOf("[[R:END]]");
+          const idxDelta = buffer.indexOf("[[R]]");
+          const idxSBegin = buffer.indexOf("[[S:BEGIN]]");
+          const idxSEnd = buffer.indexOf("[[S:END]]");
+          const idxSQuery = buffer.indexOf("[[S:QUERY]]");
+          const idxSInProg = buffer.indexOf("[[S:STATUS:in_progress]]");
+          const idxSSearch = buffer.indexOf("[[S:STATUS:searching]]");
+          const idxSComplete = buffer.indexOf("[[S:STATUS:completed]]");
+          let idx = -1;
+          let which:
+            | "BEGIN"
+            | "END"
+            | "DELTA"
+            | "SBEGIN"
+            | "SEND"
+            | "SQUERY"
+            | "S_IN_PROGRESS"
+            | "S_SEARCHING"
+            | "S_COMPLETED"
+            | null = null;
+          for (const [candidateIdx, tag] of [
+            [idxBegin, "BEGIN"],
+            [idxEnd, "END"],
+            [idxDelta, "DELTA"],
+            [idxSBegin, "SBEGIN"],
+            [idxSEnd, "SEND"],
+            [idxSQuery, "SQUERY"],
+            [idxSInProg, "S_IN_PROGRESS"],
+            [idxSSearch, "S_SEARCHING"],
+            [idxSComplete, "S_COMPLETED"],
+          ] as const) {
+            if (candidateIdx !== -1 && (idx === -1 || candidateIdx < idx)) {
+              idx = candidateIdx;
+              which = tag as any;
+            }
           }
-        );
+          if (idx === -1 || which === null) {
+            // No markers; treat entire buffer as normal text
+            if (buffer.length > 0) {
+              assistantText += buffer;
+              pushAssistant(assistantText);
+              buffer = "";
+            }
+            return false; // nothing more to process
+          }
+
+          // Emit any normal text before the marker
+          if (idx > 0) {
+            const normal = buffer.slice(0, idx);
+            assistantText += normal;
+            pushAssistant(assistantText);
+            buffer = buffer.slice(idx);
+          }
+
+          // Now buffer starts with a marker
+          if (which === "BEGIN") {
+            buffer = buffer.slice("[[R:BEGIN]]".length);
+            setReasoning("");
+            setReasoningActive(true);
+            return true; // continue loop
+          }
+          if (which === "END") {
+            buffer = buffer.slice("[[R:END]]".length);
+            setReasoningActive(false);
+            setReasoning("");
+            return true;
+          }
+          if (which === "SBEGIN") {
+            buffer = buffer.slice("[[S:BEGIN]]".length);
+            setSearchActive(true);
+            setSearchStatus("in_progress");
+            setSearchQuery("");
+            return true;
+          }
+          if (which === "SEND") {
+            buffer = buffer.slice("[[S:END]]".length);
+            setSearchActive(false);
+            setSearchStatus(null);
+            setSearchQuery("");
+            return true;
+          }
+          if (which === "S_IN_PROGRESS") {
+            buffer = buffer.slice("[[S:STATUS:in_progress]]".length);
+            setSearchStatus("in_progress");
+            return true;
+          }
+          if (which === "S_SEARCHING") {
+            buffer = buffer.slice("[[S:STATUS:searching]]".length);
+            setSearchStatus("searching");
+            return true;
+          }
+          if (which === "S_COMPLETED") {
+            buffer = buffer.slice("[[S:STATUS:completed]]".length);
+            setSearchStatus("completed");
+            return true;
+          }
+          // DELTA: consume marker and capture up to next marker or end
+          if (which === "DELTA") {
+            buffer = buffer.slice("[[R]]".length);
+            // Find next marker start
+            const nextIdx = Math.min(
+              ...[
+                "[[R:BEGIN]]",
+                "[[R:END]]",
+                "[[R]]",
+                "[[S:BEGIN]]",
+                "[[S:END]]",
+                "[[S:QUERY]]",
+                "[[S:STATUS:in_progress]]",
+                "[[S:STATUS:searching]]",
+                "[[S:STATUS:completed]]",
+              ].map((t) => {
+                const i = buffer.indexOf(t);
+                return i === -1 ? Number.POSITIVE_INFINITY : i;
+              })
+            );
+            if (!isFinite(nextIdx)) {
+              // No following marker; take all
+              setReasoning((prev) => (prev + buffer).slice(-4000));
+              buffer = "";
+            } else {
+              const deltaText = buffer.slice(0, nextIdx);
+              setReasoning((prev) => (prev + deltaText).slice(-4000));
+              buffer = buffer.slice(nextIdx);
+            }
+            return true;
+          }
+          if (which === "SQUERY") {
+            buffer = buffer.slice("[[S:QUERY]]".length);
+            const nextIdx = Math.min(
+              ...[
+                "[[R:BEGIN]]",
+                "[[R:END]]",
+                "[[R]]",
+                "[[S:BEGIN]]",
+                "[[S:END]]",
+                "[[S:QUERY]]",
+                "[[S:STATUS:in_progress]]",
+                "[[S:STATUS:searching]]",
+                "[[S:STATUS:completed]]",
+              ].map((t) => {
+                const i = buffer.indexOf(t);
+                return i === -1 ? Number.POSITIVE_INFINITY : i;
+              })
+            );
+            if (!isFinite(nextIdx)) {
+              setSearchQuery((prev) => (prev + buffer).slice(-4000));
+              buffer = "";
+            } else {
+              const q = buffer.slice(0, nextIdx);
+              setSearchQuery((prev) => (prev + q).slice(-4000));
+              buffer = buffer.slice(nextIdx);
+            }
+            return true;
+          }
+          return false;
+        };
+
+        // Iterate until buffer fully processed or no markers left
+        // Break to await more data if a marker is partially present at end
+        let progressed = true;
+        while (progressed) {
+          progressed = processMarkers();
+        }
       }
       const isReady = /ready to finalize plan/i.test(assistantText);
       setReady(isReady);
+      setReasoning("");
+      setReasoningActive(false);
+      setSearchActive(false);
+      setSearchStatus(null);
+      setSearchQuery("");
       try {
         localStorage.setItem("chat:ready", JSON.stringify(isReady));
       } catch {}
@@ -166,6 +354,22 @@ export default function Chat() {
   return (
     <div className="h-full flex flex-col">
       <div className="flex-1 overflow-auto p-4 bg-gradient-to-b from-transparent via-zinc-900/20 to-zinc-900/40">
+        {(reasoningActive || searchActive) && (
+          <div className="mb-3 text-xs text-muted-foreground space-y-1">
+            {reasoningActive && (
+              <div>
+                <span className="font-medium">Reasoning</span>: {reasoning}
+              </div>
+            )}
+            {searchActive && (
+              <div>
+                <span className="font-medium">Web search</span>
+                {searchStatus ? ` — ${searchStatus}` : ""}
+                {searchQuery ? ` — ${searchQuery}` : ""}
+              </div>
+            )}
+          </div>
+        )}
         {messages.length > 0 && (
           <div className="space-y-3 text-sm">
             {messages.map((m, i) => (
