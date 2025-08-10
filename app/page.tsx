@@ -5,7 +5,7 @@ import { DollarSign, LineChart, RefreshCw } from "lucide-react";
 
 export default function Page() {
   return (
-    <main className="container mx-auto max-w-7xl p-6 space-y-6">
+    <main className="mx-auto max-w-[1600px] px-2 md:px-4 space-y-4 md:space-y-3">
       <header className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -37,11 +37,11 @@ export default function Page() {
           </div>
         </div>
       </header>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="rounded-md border h-[calc(100vh-200px)] overflow-hidden">
+      <div className="grid grid-cols-12 gap-2 md:gap-3">
+        <div className="col-span-12 md:col-span-4 rounded-md border h-[calc(100vh-200px)] overflow-hidden">
           <Chat />
         </div>
-        <div className="rounded-md border p-4 h-[calc(100vh-200px)] overflow-auto">
+        <div className="col-span-12 md:col-span-8 rounded-md border p-2 md:p-3 h-[calc(100vh-200px)] overflow-auto">
           <Results />
         </div>
       </div>

@@ -187,15 +187,21 @@ export default function Chat() {
       </div>
       <form
         onSubmit={onSubmit}
-        className="border-t p-3 flex items-center gap-3"
+        className="border-t p-3 grid grid-cols-12 gap-3 items-end"
       >
-        <Textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Describe your strategy with explicit entry and exit rules..."
-          className="min-h-[44px] max-h-40"
-        />
-        <div className="flex items-center gap-2">
+        <div className="col-span-12">
+          <Textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="Describe your strategy with explicit entry and exit rules..."
+            className="min-h-[64px] md:min-h-[96px] max-h-60"
+          />
+        </div>
+        <div className="col-span-12 md:col-span-7 text-xs text-muted-foreground">
+          Tip: Ask for specific entry/exit criteria and cite official sources.
+          When done, type "Ready to finalize plan".
+        </div>
+        <div className="col-span-12 md:col-span-5 flex items-center justify-end gap-2">
           <Button type="submit" disabled={loading}>
             {loading ? "Thinking…" : "Send"}
           </Button>
@@ -216,7 +222,9 @@ export default function Chat() {
             Reset
           </Button>
         </div>
-        {error && <span className="text-sm text-destructive">{error}</span>}
+        {error && (
+          <span className="col-span-12 text-sm text-destructive">{error}</span>
+        )}
       </form>
     </div>
   );
