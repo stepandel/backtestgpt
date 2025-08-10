@@ -1,44 +1,70 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import StatsCards from "@/components/StatsCards";
-import EquityCurve from "@/components/Charts/EquityCurve";
-import Table from "@/components/Table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import ResultsView from "@/components/ResultsView";
+import { MOCK_EQUITY_CURVE } from "@/lib/mockCurve";
 
 export default function Results() {
   const [data, setData] = useState<any | null>(null);
 
-  function genMockCurve(finalRet: number, points = 200) {
+  function genMockCurve(finalRet: number, points = 240) {
     const out: { t: string; v: number }[] = [];
     const sign = finalRet >= 0 ? 1 : -1;
-    const mag = Math.abs(finalRet);
-    const dip = Math.min(0.25, 0.3 * mag + 0.05);
-    const overshoot = Math.min(0.15, 0.2 * mag);
+    const mag = Math.max(0.05, Math.abs(finalRet));
+    // Shape parameters per requested behavior
+    const earlyDipAmp = Math.min(0.35, 0.4 * mag + 0.06); // sharp drop right after announcement
+    const midDipAmp = Math.min(0.22, 0.25 * mag + 0.04); // drop 2-3 days pre-rebalance
+    const lateSurgeAmp = Math.min(0.35, 0.5 * mag + 0.08); // sharpest rise last day
+    const trendAmp = mag; // underlying uptrend magnitude
+
     const ease = (x: number) =>
       x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+
     for (let i = 0; i < points; i++) {
       const t = i / (points - 1);
-      const base = ease(t);
-      const dipShape = -dip * Math.exp(-Math.pow((t - 0.2) / 0.12, 2));
-      const overShape = overshoot * Math.exp(-Math.pow((t - 0.85) / 0.08, 2));
-      const wave = 0.015 * Math.sin(8 * Math.PI * t);
-      const path = base + dipShape + overShape + wave;
-      const ret = sign * mag * path;
+      // Upward drift toward final
+      const trend = trendAmp * ease(t);
+      // Very early sharp dip centered near 0.06
+      const earlyDip =
+        -earlyDipAmp * Math.exp(-Math.pow((t - 0.06) / 0.035, 2));
+      // Pre-rebalance dip centered near 0.88
+      const preRebDip = -midDipAmp * Math.exp(-Math.pow((t - 0.88) / 0.05, 2));
+      // Last day surge: narrow positive Gaussian near 0.98 + end-power
+      const endSpike =
+        lateSurgeAmp * Math.exp(-Math.pow((t - 0.985) / 0.018, 2));
+      const endPower = lateSurgeAmp * Math.pow(Math.max(0, t - 0.95) / 0.05, 3);
+      // Subtle oscillation for texture
+      const wave = 0.01 * Math.sin(10 * Math.PI * t);
+      let path =
+        trend +
+        earlyDip +
+        preRebDip +
+        Math.max(endSpike, 0) +
+        Math.max(endPower, 0) +
+        wave;
+      // Scale by sign
+      const ret = sign * path;
       out.push({ t: String(i), v: 1 + ret });
     }
+    // Force exact endpoints, keep shape, and prevent last-segment drops
     out[0].v = 1;
-    out[out.length - 1].v = 1 + finalRet;
-    return out;
-  }
-
-  function needsCurveUpgrade(curve: any) {
-    if (!Array.isArray(curve) || curve.length < 10) return true;
-    let diffs = 0;
-    for (let i = 1; i < curve.length; i++) {
-      diffs += Math.abs((curve[i]?.v ?? 0) - (curve[i - 1]?.v ?? 0));
+    const endV = 1 + finalRet;
+    const pivot = Math.max(1, Math.floor(0.95 * (points - 1)));
+    // Monotonic non-decreasing over the last 5%
+    for (let i = pivot + 1; i < points; i++) {
+      out[i].v = Math.max(out[i].v, out[i - 1].v);
     }
-    return diffs < 1e-6;
+    // Nudge last segment up to endV without flattening details
+    const currentEnd = out[points - 1].v;
+    if (currentEnd !== endV) {
+      const delta = endV - currentEnd;
+      for (let i = pivot; i < points; i++) {
+        const tt = (i - pivot) / (points - 1 - pivot || 1);
+        out[i].v += delta * tt;
+      }
+      out[points - 1].v = endV;
+    }
+    return out;
   }
 
   useEffect(() => {
@@ -46,24 +72,11 @@ export default function Results() {
     try {
       const saved = localStorage.getItem("backtest:data");
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (needsCurveUpgrade(parsed?.results?.equityCurve)) {
-          const finalRet = parsed?.results?.stats?.median ?? 0;
-          parsed.results.equityCurve = genMockCurve(finalRet);
-          try {
-            localStorage.setItem("backtest:data", JSON.stringify(parsed));
-          } catch {}
-        }
-        setData(parsed);
+        setData(JSON.parse(saved));
       }
     } catch {}
     function handler(e: any) {
-      const incoming = e.detail;
-      if (needsCurveUpgrade(incoming?.results?.equityCurve)) {
-        const finalRet = incoming?.results?.stats?.median ?? 0;
-        incoming.results.equityCurve = genMockCurve(finalRet);
-      }
-      setData(incoming);
+      setData(e.detail);
       try {
         localStorage.setItem("backtest:data", JSON.stringify(e.detail));
         // Cache prices per ticker for future sessions
@@ -85,52 +98,12 @@ export default function Results() {
   if (!data) return null;
 
   const { plan, results } = data;
+  // Replace curve with constant mock data for demo; everything else remains real
+  const demoResults = { ...results, equityCurve: MOCK_EQUITY_CURVE };
 
   return (
     <div className="space-y-6">
-      <StatsCards stats={results.stats} />
-      <div className="grid grid-cols-1 gap-6">
-        <Card className="bg-zinc-950/40 backdrop-blur">
-          <CardHeader>
-            <CardTitle>Equity Curve</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <EquityCurve curve={results.equityCurve} />
-          </CardContent>
-        </Card>
-      </div>
-      <Card className="bg-zinc-950/40 backdrop-blur">
-        <CardHeader>
-          <CardTitle>Per-Ticker Breakdown</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table rows={results.perTicker} />
-        </CardContent>
-      </Card>
-      <Card className="bg-zinc-950/40 backdrop-blur">
-        <CardHeader>
-          <CardTitle>Citations</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
-            {plan
-              .flatMap((p: any) => [p.entry?.url, p.exit?.url])
-              .filter(Boolean)
-              .map((u: string, idx: number) => (
-                <li key={idx}>
-                  <a
-                    className="underline"
-                    href={u}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {u}
-                  </a>
-                </li>
-              ))}
-          </ul>
-        </CardContent>
-      </Card>
+      <ResultsView plan={plan} results={demoResults} />
     </div>
   );
 }

@@ -27,6 +27,10 @@ export default function EquityCurve({ curve }: { curve: Pt[] }) {
     .map((v, i) => `${i === 0 ? "M" : "L"} ${xFor(i)} ${yFor(v)}`)
     .join(" ");
 
+  const area = `${d} L ${margin.left + chartW} ${margin.top + chartH} L ${
+    margin.left
+  } ${margin.top + chartH} Z`;
+
   const ticks = [0, Math.floor(values.length / 2), values.length - 1].filter(
     (x, i, a) => a.indexOf(x) === i
   );
@@ -48,6 +52,7 @@ export default function EquityCurve({ curve }: { curve: Pt[] }) {
         );
       })}
 
+      <path d={area} fill="hsl(var(--primary))" fillOpacity={0.08} />
       <path d={d} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} />
 
       {ticks.map((ti) => (

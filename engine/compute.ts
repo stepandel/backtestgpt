@@ -81,7 +81,13 @@ export async function runBacktest(plan: Plan) {
     return out;
   }
 
-  const curve = genMockCurve(medianRet);
+  // Ensure a visually meaningful demo curve: fallback if median return is too small
+  const fallbackMag = 0.15; // strong demo amplitude
+  const target =
+    Math.abs(medianRet) < 0.01
+      ? (medianRet >= 0 ? 1 : -1) * fallbackMag
+      : medianRet;
+  const curve = genMockCurve(target);
 
   return {
     perTicker,
