@@ -66,9 +66,7 @@ export default function Chat() {
     setLoading(true);
     setError(null);
     try {
-      const transcript = messages
-        .map((m) => `${m.role}: ${m.content}`)
-        .join("\n\n");
+      const transcript = messages[messages.length - 1].content;
       const planRes = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
