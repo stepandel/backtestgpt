@@ -1,5 +1,5 @@
 import { determineDailyExecution, type Execution } from "@/engine/strategy";
-import { getDailyBars } from "@/lib/prices";
+import { getHourlyBars } from "@/lib/prices";
 import type { Plan } from "@/lib/planner";
 
 export async function runBacktest(plan: Plan) {
@@ -17,13 +17,14 @@ export async function runBacktest(plan: Plan) {
     return at > acc ? at : acc;
   }, null);
 
+  // Use date-only strings (YYYY-MM-DD) as before to satisfy Polygon aggregates requirements
   const from = (minEntry ?? "2019-01-01T00:00:00Z").slice(0, 10);
   const to = (maxExit ?? new Date().toISOString()).slice(0, 10);
 
-  const prices: Record<string, Awaited<ReturnType<typeof getDailyBars>>> = {};
+  const prices: Record<string, Awaited<ReturnType<typeof getHourlyBars>>> = {};
   await Promise.all(
     tickers.map(async (t) => {
-      prices[t] = await getDailyBars(t, from, to);
+      prices[t] = await getHourlyBars(t, from, to);
     })
   );
 
@@ -38,14 +39,21 @@ export async function runBacktest(plan: Plan) {
     ? sorted.reduce((a, b) => a + b, 0) / perTicker.length
     : 0;
   const median = perTicker.length ? sorted[Math.floor(sorted.length / 2)] : 0;
-  const equityCurve = perTicker.map((r, i) => ({
-    t: String(i),
-    v: 1 + perTicker.slice(0, i + 1).reduce((s, x) => s + x.pctReturn, 0),
-  }));
+  // More granular equity curve from cumulative average of per-ticker returns distributed equally
+  const steps = Math.max(1, prices[tickers[0]]?.length || perTicker.length);
+  const curve: { t: string; v: number }[] = [];
+  let value = 1;
+  for (let i = 0; i < steps; i++) {
+    const stepRet = perTicker.length
+      ? perTicker.reduce((s, r) => s + r.pctReturn / steps, 0)
+      : 0;
+    value += stepRet;
+    curve.push({ t: String(i), v: value });
+  }
 
   return {
     perTicker,
     stats: { totalReturn, hitRate, mean, median },
-    equityCurve,
+    equityCurve: curve,
   };
 }
