@@ -1,6 +1,20 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+
 type Pt = { t: string; v: number };
 
-export default function EquityCurve({ curve }: { curve: Pt[] }) {
+type Props = {
+  curve: Pt[];
+  entryIndex?: number;
+  exitIndex?: number;
+  onOffsetsChange?: (entryIndex: number, exitIndex: number) => void;
+};
+
+export default function EquityCurve({
+  curve,
+  entryIndex,
+  exitIndex,
+  onOffsetsChange,
+}: Props) {
   if (!curve?.length) return null;
 
   // Normalize to start at 1.0
@@ -35,8 +49,96 @@ export default function EquityCurve({ curve }: { curve: Pt[] }) {
     (x, i, a) => a.indexOf(x) === i
   );
 
+  const isControlled =
+    typeof entryIndex === "number" && typeof exitIndex === "number";
+  const [startIdx, setStartIdx] = useState<number>(
+    isControlled ? Math.min(entryIndex!, exitIndex!) : 0
+  );
+  const [endIdx, setEndIdx] = useState<number>(
+    isControlled ? Math.max(entryIndex!, exitIndex!) : values.length - 1
+  );
+  const draggingRef = useRef<null | "start" | "end">(null);
+
+  useEffect(() => {
+    if (isControlled) {
+      setStartIdx(Math.min(entryIndex!, exitIndex!));
+      setEndIdx(Math.max(entryIndex!, exitIndex!));
+    }
+  }, [entryIndex, exitIndex, isControlled]);
+
+  function clampIndex(i: number) {
+    return Math.max(0, Math.min(values.length - 1, i));
+  }
+
+  function indexForX(clientX: number, svgEl: SVGSVGElement | null) {
+    if (!svgEl) return 0;
+    const rect = svgEl.getBoundingClientRect();
+    const scaleX = rect.width / width;
+    const renderedMarginLeft = margin.left * scaleX;
+    const renderedChartW = chartW * scaleX;
+    let x = clientX - rect.left;
+    // Clamp to chart drawing area in rendered pixels
+    x = Math.max(
+      renderedMarginLeft,
+      Math.min(renderedMarginLeft + renderedChartW, x)
+    );
+    const rel = (x - renderedMarginLeft) / (renderedChartW || 1);
+    return clampIndex(Math.round(rel * (values.length - 1)));
+  }
+
+  const startX = xFor(startIdx);
+  const endX = xFor(endIdx);
+
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
+    try {
+      (e.currentTarget as any).setPointerCapture?.(e.pointerId);
+    } catch {}
+    // Choose handle by pixel proximity to avoid index rounding artifacts
+    const rect = svgRef.current?.getBoundingClientRect();
+    const scaleX = rect ? rect.width / width : 1;
+    const pxX = rect ? e.clientX - rect.left : 0;
+    const startPx = xFor(startIdx) * scaleX;
+    const endPx = xFor(endIdx) * scaleX;
+    const distStartPx = Math.abs(pxX - startPx);
+    const distEndPx = Math.abs(pxX - endPx);
+    draggingRef.current = distStartPx <= distEndPx ? "start" : "end";
+  }
+
+  function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    if (!draggingRef.current) return;
+    const idx = indexForX(e.clientX, svgRef.current);
+    if (draggingRef.current === "start") {
+      const next = Math.min(idx, endIdx);
+      if (!isControlled) setStartIdx(next);
+      onOffsetsChange?.(next, endIdx);
+    } else {
+      const next = Math.max(idx, startIdx);
+      if (!isControlled) setEndIdx(next);
+      onOffsetsChange?.(startIdx, next);
+    }
+  }
+
+  function onPointerUp(e?: React.PointerEvent<SVGSVGElement>) {
+    draggingRef.current = null;
+    if (e) {
+      try {
+        (e.currentTarget as any).releasePointerCapture?.(e.pointerId);
+      } catch {}
+    }
+  }
+
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-64">
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${width} ${height}`}
+      className="w-full h-64 cursor-crosshair select-none"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerUp}
+    >
       {[0, 0.5, 1].map((t, i) => {
         const y = margin.top + chartH * t;
         return (
@@ -54,6 +156,48 @@ export default function EquityCurve({ curve }: { curve: Pt[] }) {
 
       <path d={area} fill="hsl(var(--primary))" fillOpacity={0.08} />
       <path d={d} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} />
+
+      {/* Selected window shading */}
+      <rect
+        x={Math.min(startX, endX)}
+        y={margin.top}
+        width={Math.max(2, Math.abs(endX - startX))}
+        height={chartH}
+        fill="hsl(var(--primary))"
+        fillOpacity={0.06}
+      />
+
+      {/* Start handle */}
+      <line
+        x1={startX}
+        x2={startX}
+        y1={margin.top}
+        y2={margin.top + chartH}
+        stroke="hsl(var(--primary))"
+        strokeOpacity={0.6}
+      />
+      <circle
+        cx={startX}
+        cy={yFor(values[startIdx])}
+        r={5}
+        fill="hsl(var(--primary))"
+      />
+
+      {/* End handle */}
+      <line
+        x1={endX}
+        x2={endX}
+        y1={margin.top}
+        y2={margin.top + chartH}
+        stroke="hsl(var(--primary))"
+        strokeOpacity={0.6}
+      />
+      <circle
+        cx={endX}
+        cy={yFor(values[endIdx])}
+        r={5}
+        fill="hsl(var(--primary))"
+      />
 
       {ticks.map((ti) => (
         <text
