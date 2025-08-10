@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
@@ -13,13 +13,43 @@ export default function Chat() {
   >([]);
   const [ready, setReady] = useState(false);
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("chat:messages");
+      if (saved) {
+        const parsed = JSON.parse(saved) as {
+          role: "user" | "assistant";
+          content: string;
+        }[];
+        setMessages(parsed);
+        const lastAssistant = [...parsed]
+          .reverse()
+          .find((m) => m.role === "assistant");
+        if (
+          lastAssistant &&
+          /ready to finalize plan/i.test(lastAssistant.content)
+        )
+          setReady(true);
+      }
+    } catch {}
+  }, []);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!prompt.trim()) return;
     setLoading(true);
     const userMessage = { role: "user" as const, content: prompt };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev: { role: "user" | "assistant"; content: string }[]) => {
+      const next: { role: "user" | "assistant"; content: string }[] = [
+        ...prev,
+        userMessage,
+      ];
+      try {
+        localStorage.setItem("chat:messages", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
     setPrompt("");
     try {
       const chatRes = await fetch("/api/chat", {
@@ -33,9 +63,16 @@ export default function Chat() {
       let assistantText = "";
       // create streaming assistant message placeholder
       let assistantIndex = -1;
-      setMessages((prev) => {
+      setMessages((prev: { role: "user" | "assistant"; content: string }[]) => {
         assistantIndex = prev.length;
-        return [...prev, { role: "assistant", content: "" }];
+        const next: { role: "user" | "assistant"; content: string }[] = [
+          ...prev,
+          { role: "assistant", content: "" },
+        ];
+        try {
+          localStorage.setItem("chat:messages", JSON.stringify(next));
+        } catch {}
+        return next;
       });
       while (true) {
         const { value, done } = await reader.read();
@@ -43,17 +80,28 @@ export default function Chat() {
         const chunk = decoder.decode(value, { stream: true });
         assistantText += chunk;
         const text = assistantText;
-        setMessages((prev) => {
-          const next = [...prev];
-          // Ensure last message is assistant placeholder
-          const idx = assistantIndex >= 0 ? assistantIndex : prev.length - 1;
-          if (next[idx] && next[idx].role === "assistant") {
-            next[idx] = { role: "assistant", content: text };
+        setMessages(
+          (prev: { role: "user" | "assistant"; content: string }[]) => {
+            const next: { role: "user" | "assistant"; content: string }[] = [
+              ...prev,
+            ];
+            // Ensure last message is assistant placeholder
+            const idx = assistantIndex >= 0 ? assistantIndex : prev.length - 1;
+            if (next[idx] && next[idx].role === "assistant") {
+              next[idx] = { role: "assistant", content: text };
+            }
+            try {
+              localStorage.setItem("chat:messages", JSON.stringify(next));
+            } catch {}
+            return next;
           }
-          return next;
-        });
+        );
       }
-      setReady(/ready to finalize plan/i.test(assistantText));
+      const isReady = /ready to finalize plan/i.test(assistantText);
+      setReady(isReady);
+      try {
+        localStorage.setItem("chat:ready", JSON.stringify(isReady));
+      } catch {}
     } catch (err: any) {
       setError(err?.message ?? "Unknown error");
     } finally {
@@ -81,6 +129,12 @@ export default function Chat() {
       });
       if (!runRes.ok) throw new Error("Backtest failed");
       const results = await runRes.json();
+      try {
+        localStorage.setItem(
+          "backtest:data",
+          JSON.stringify({ plan, results })
+        );
+      } catch {}
       const event = new CustomEvent("backtest:results", {
         detail: { plan, results },
       });
@@ -90,6 +144,19 @@ export default function Chat() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function onReset() {
+    try {
+      localStorage.removeItem("chat:messages");
+      localStorage.removeItem("chat:ready");
+      localStorage.removeItem("backtest:data");
+    } catch {}
+    setMessages([]);
+    setPrompt("");
+    setReady(false);
+    const event = new CustomEvent("backtest:results", { detail: null });
+    window.dispatchEvent(event);
   }
 
   return (
@@ -138,6 +205,14 @@ export default function Chat() {
             onClick={onFinalize}
           >
             {ready ? "Finalize Plan" : "Continue Chat"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={loading}
+            onClick={onReset}
+          >
+            Reset
           </Button>
         </div>
         {error && <span className="text-sm text-destructive">{error}</span>}

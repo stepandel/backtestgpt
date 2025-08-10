@@ -11,8 +11,19 @@ export default function Results() {
   const [data, setData] = useState<any | null>(null);
 
   useEffect(() => {
+    // Restore persisted backtest
+    try {
+      const saved = localStorage.getItem("backtest:data");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setData(parsed);
+      }
+    } catch {}
     function handler(e: any) {
       setData(e.detail);
+      try {
+        localStorage.setItem("backtest:data", JSON.stringify(e.detail));
+      } catch {}
     }
     window.addEventListener("backtest:results", handler);
     return () => window.removeEventListener("backtest:results", handler);
