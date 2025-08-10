@@ -26,11 +26,11 @@ export default function ResultsView({
     <div className="space-y-6">
       <StatsCards stats={results.stats} />
       <div className="grid grid-cols-1 gap-6">
-        <Card className="bg-zinc-950/40 backdrop-blur">
+        <Card className="bg-zinc-950/40 backdrop-blur overflow-hidden">
           <CardHeader>
             <CardTitle>Equity Curve</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-0">
             <EquityCurve curve={results.equityCurve} />
           </CardContent>
         </Card>

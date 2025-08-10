@@ -26,9 +26,28 @@ export default function EquityCurve({
   const yMin = Math.max(0, minV - pad);
   const yMax = maxV + pad;
 
-  const width = 600;
-  const height = 220;
-  const margin = { top: 10, right: 10, bottom: 24, left: 40 };
+  // Use container width by matching the rendered client width on first render
+  const [clientW, setClientW] = useState<number>(600);
+  const [clientH, setClientH] = useState<number>(220);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const cr = entry.contentRect;
+        setClientW(Math.max(300, cr.width));
+        setClientH(Math.max(180, cr.height));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const width = clientW;
+  const height = clientH;
+  // Increase left margin to prevent y-axis labels from bleeding outside
+  const margin = { top: 10, right: 10, bottom: 24, left: 64 };
   const chartW = width - margin.left - margin.right;
   const chartH = height - margin.top - margin.bottom;
 
@@ -89,7 +108,7 @@ export default function EquityCurve({
   const startX = xFor(startIdx);
   const endX = xFor(endIdx);
 
-  const svgRef = useRef<SVGSVGElement | null>(null);
+  // svgRef declared above
 
   function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
     try {
