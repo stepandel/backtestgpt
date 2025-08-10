@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import openai from "openai";
 import OpenAI from "openai";
 
 export type PlanItem = {
@@ -75,173 +76,52 @@ export const OFFICIAL_EVENT_TOOL = {
   },
 } as const;
 
-const SYSTEM_PROMPT = `You are an event-to-trading-plan extraction agent.
+const SYSTEM_PROMPT = `
+You convert a research draft into a deterministic trading plan.
 
-OBJECTIVE
-From a user’s free-form trading strategy, produce a structured plan of {ticker, entry, exit} items suitable for deterministic backtesting.
+Respond ONLY by calling the tool "officialEventExtractor" with:
+{ "plan": PlanItem[] }
 
-RESPONSE FORMAT (MANDATORY)
-- You must respond ONLY by calling the tool "officialEventExtractor" with a single argument:
-  { "plan": PlanItem[] }
-- DO NOT output any natural language or ask follow-up questions.
-- If nothing qualifies, return { "plan": [] }.
+Constraints:
+- Time window: last two years from today. Drop older events.
+- Timezone: America/New_York (ET). All timestamps MUST be ISO8601 with offset.
+- entry.at and exit.at are REQUIRED for all items (never null). If a timestamp cannot be determined from official sources, drop that ticker.
+- source and url are OPTIONAL. If present:
+  - source = name of the publication or organization where the URL points
+  - url = direct link to the official source
+- Use only official URLs from the research input (issuer IR, SEC, exchange, index provider). Never blogs or news aggregators.
+- No natural language or questions.
 
-TIME WINDOW (FIXED)
-- Consider only events whose entry and exit both fall within the LAST TWO YEARS from “today”.
-- If an event spans beyond that window, exclude it.
-
-TIMEZONE (FIXED)
-- All timestamps must be in America/New_York (ET) and ISO8601 (include offset). Example: 2024-06-07T17:15:00-04:00.
-
-ENTRY/EXIT INTERPRETATION
-- The user prompt will always include requirements for entry and requirements for exit (explicitly or implicitly).
-- Parse those requirements. If ambiguous, choose the most standard, widely-accepted interpretation consistent with the text and proceed WITHOUT ASKING CLARIFYING QUESTIONS.
-- If you cannot determine a defensible, official timestamp for a leg, EXCLUDE that ticker rather than guessing.
-
-OFFICIAL SOURCES (REQUIRED)
-- Use ONLY official sources to determine dates/times:
-  • Company Investor Relations (press releases)  
-  • SEC EDGAR filings (8-K, 6-K, etc.)  
-  • Stock exchange notices / auction documentation  
-  • Index provider press releases (e.g., S&P Dow Jones Indices)  
-- DISALLOWED: blogs, news summaries, social posts, aggregators without original official links.
-- Each leg (entry/exit) must include a URL to the official source used.
-- If the official source provides only a date (no time), set at = null and source = "date-only".
-
-OUTPUT SCHEMA
-PlanItem = {
+PlanItem schema:
+{
   ticker: string,
-  entry: { at: string | null, source: string, url: string },
-  exit:  { at: string | null, source: string, url: string }
+  entry: { at: string, source?: string, url?: string },
+  exit:  { at: string, source?: string, url?: string }
 }
-Tool argument = { plan: PlanItem[] }
 
-RULES OF ENGAGEMENT
-- Never ask the user for more details. Apply defaults above and proceed.
-- Prefer precise timestamps found in the official text. If not present, use date-only (at = null).
-- If multiple official sources conflict, select the most authoritative (issuer or primary authority) and continue.
-- Exclude any ticker where you cannot cite an official source for BOTH legs consistent with the user’s entry/exit requirements.
-- Keep ticker symbols as listed on primary U.S. exchanges when applicable.
-
-EXAMPLES (ILLUSTRATIVE ONLY)
-- S&P 500 additions: entry = official index-provider announcement timestamp; exit = primary exchange closing auction time on the effective date (cite exchange auction spec). If announcement lists date-only, entry.at = null with source = "date-only".
-- Earnings strategies: entry = company IR press release/8-K timestamp; exit = next day official close (exchange site) if specified by user, otherwise as requested.
-
-FINAL CHECK
-- Are all items within the last two years? If not, drop them.
-- Are all timestamps ET and ISO8601 (or null for date-only)? If not, fix them.
-- Are all URLs official? If not, drop the item.
-
-Now, perform any necessary web search internally, build the plan, and RESPOND ONLY by calling tool "officialEventExtractor" with:
-{ "plan": [...] }`;
-
-export async function createPlanFromPrompt(prompt: string): Promise<Plan> {
-  // Demo fallback when no OpenAI key is present
-  if (!env.OPENAI_API_KEY) {
-    const lower = prompt.toLowerCase();
-    if (
-      lower.includes("s&p") ||
-      lower.includes("sp500") ||
-      lower.includes("s&p 500")
-    ) {
-      return [
-        {
-          ticker: "KDP",
-          entry: {
-            at: "2024-06-07T17:15:00-04:00",
-            source: "S&P DJI press release",
-            url: "https://press.spglobal.com/2024-06-07-S-P-Dow-Jones-Indices-Announces-Quarterly-Rebalance-of-the-S-P-500-and-Other-Indices",
-          },
-          exit: {
-            at: "2024-06-24T16:00:00-04:00",
-            source: "Exchange closing auction spec (NYSE)",
-            url: "https://www.nyse.com/auctions",
-          },
-        },
-      ];
-    }
-    return [
-      {
-        ticker: "AAPL",
-        entry: {
-          at: null,
-          source: "date-only",
-          url: "https://investor.apple.com/",
-        },
-        exit: {
-          at: null,
-          source: "date-only",
-          url: "https://investor.apple.com/",
-        },
-      },
-    ];
-  }
-
-  const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
-  try {
-    const stream = await client.responses.stream({
-      model: "gpt-5",
-      input: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: prompt },
-      ],
-      tools: [{ type: "web_search_preview" }, OFFICIAL_EVENT_TOOL as any],
-    });
-
-    const planPromise = new Promise<Plan>((resolve, reject) => {
-      stream.on("event", (evt: any) => {
-        console.log("evt", evt);
-        if (evt?.name === "officialEventExtractor" && evt?.arguments) {
-          try {
-            const payload = JSON.parse(evt.arguments);
-            const out = (payload?.plan ?? payload) as Plan;
-            resolve(out);
-          } catch (e) {
-            reject(new Error("Failed to parse tool_call arguments as JSON"));
-          }
-        }
-      });
-      stream.on("error", (e: any) => reject(e));
-      stream.on("end", () =>
-        reject(
-          new Error(
-            "No officialEventExtractor tool call found in streamed response"
-          )
-        )
-      );
-    });
-
-    const plan = await planPromise.finally(async () => {
-      try {
-        await stream.done();
-      } catch {}
-    });
-    return plan;
-  } catch (err: any) {
-    throw new Error(
-      `Planner failed using gpt-5 with web_search_preview: ${
-        err?.message || err
-      }`
-    );
-  }
-}
+Rules:
+- Keep only tickers with BOTH entry and exit legs.
+- Prefer precise timestamps from the official source.
+- Max 20 items.
+`;
 
 // Stage 2: Structure unstructured transcript/content into OFFICIAL_EVENT_TOOL
 export async function structurePlanFromTranscript(
   transcript: string
 ): Promise<Plan> {
+  console.log("transcript", transcript);
   if (!env.OPENAI_API_KEY)
     throw new Error("OPENAI_API_KEY required to structure plan");
   const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
-  const response: any = await client.responses.create({
-    model: "gpt-5",
-    tools: [OFFICIAL_EVENT_TOOL as any],
-    tool_choice: { type: "function", name: "officialEventExtractor" },
+  const response = await client.responses.create({
+    prompt: {
+      id: "pmpt_6897e44cf814819481c080c9a3d275d80e2bae4d4ff8c75d",
+      version: "1",
+    },
     input: [
-      { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
-        content: `Given the following gathered notes/transcript, extract a Plan strictly as per tool schema.\n\n${transcript}`,
+        content: JSON.stringify(transcript),
       },
     ],
   });
