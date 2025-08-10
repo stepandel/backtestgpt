@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 
 export default function Chat() {
   const [prompt, setPrompt] = useState("");
@@ -173,13 +176,60 @@ export default function Chat() {
                 }`}
               >
                 <div
-                  className={`max-w-[85%] rounded-md px-3 py-2 whitespace-pre-wrap ${
+                  className={`max-w-[85%] rounded-md px-3 py-2 ${
                     m.role === "user"
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-foreground"
                   }`}
                 >
-                  {m.content}
+                  {m.role === "assistant" ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm, remarkBreaks]}
+                      components={{
+                        ul: ({ node, ...props }) => (
+                          <ul
+                            className="list-disc pl-5 my-2 space-y-1"
+                            {...props}
+                          />
+                        ),
+                        ol: ({ node, ...props }) => (
+                          <ol
+                            className="list-decimal pl-5 my-2 space-y-1"
+                            {...props}
+                          />
+                        ),
+                        h2: ({ node, ...props }) => (
+                          <h2
+                            className="text-xl font-semibold mt-3 mb-1"
+                            {...props}
+                          />
+                        ),
+                        h3: ({ node, ...props }) => (
+                          <h3
+                            className="text-lg font-semibold mt-3 mb-1"
+                            {...props}
+                          />
+                        ),
+                        p: ({ node, ...props }) => (
+                          <p className="whitespace-pre-wrap" {...props} />
+                        ),
+                        code: ({ className, children, ...props }) => (
+                          <code
+                            className={`bg-black/30 rounded px-1 ${
+                              className || ""
+                            }`}
+                            {...props}
+                          >
+                            {children}
+                          </code>
+                        ),
+                      }}
+                    >
+                      {m.content}
+                    </ReactMarkdown>
+                  ) : (
+                    <>{m.content}</>
+                  )}
                 </div>
               </div>
             ))}
