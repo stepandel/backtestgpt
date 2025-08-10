@@ -161,7 +161,7 @@ export default function Chat() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto p-4 bg-gradient-to-b from-transparent via-zinc-900/20 to-zinc-900/40">
         {messages.length > 0 && (
           <div className="space-y-3 text-sm">
             {messages.map((m, i) => (
@@ -193,6 +193,7 @@ export default function Chat() {
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Describe your strategy with explicit entry and exit rules..."
+          className="min-h-[44px] max-h-40"
         />
         <div className="flex items-center gap-2">
           <Button type="submit" disabled={loading}>

@@ -37,7 +37,7 @@ export default function Results() {
     <div className="space-y-6">
       <StatsCards stats={results.stats} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
+        <Card className="bg-zinc-950/40 backdrop-blur">
           <CardHeader>
             <CardTitle>Histogram of Returns</CardTitle>
           </CardHeader>
@@ -47,7 +47,7 @@ export default function Results() {
             />
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-zinc-950/40 backdrop-blur">
           <CardHeader>
             <CardTitle>Equity Curve</CardTitle>
           </CardHeader>
@@ -56,7 +56,7 @@ export default function Results() {
           </CardContent>
         </Card>
       </div>
-      <Card>
+      <Card className="bg-zinc-950/40 backdrop-blur">
         <CardHeader>
           <CardTitle>Per-Ticker Breakdown</CardTitle>
         </CardHeader>
@@ -64,7 +64,7 @@ export default function Results() {
           <Table rows={results.perTicker} />
         </CardContent>
       </Card>
-      <Card>
+      <Card className="bg-zinc-950/40 backdrop-blur">
         <CardHeader>
           <CardTitle>Citations</CardTitle>
         </CardHeader>
