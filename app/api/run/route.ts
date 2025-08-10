@@ -4,12 +4,12 @@ import type { Plan } from "@/lib/planner";
 import { runBacktest } from "@/engine/compute";
 
 const Entry = z.object({
-  at: z.string().nullable(),
-  source: z.string(),
-  url: z.string().url(),
+  at: z.string(),
+  source: z.string().optional(),
+  url: z.string().url().optional(),
 });
 const Item = z.object({ ticker: z.string(), entry: Entry, exit: Entry });
-const Body = z.object({ plan: z.array(Item) });
+const Body = z.object({ plan: z.array(Item).max(5) });
 
 export async function POST(req: NextRequest) {
   const json = await req.json();

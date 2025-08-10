@@ -15,6 +15,7 @@ const STAGE1_SYSTEM = `Act as an interactive research assistant specializing in 
 - **Minimize interruptions:** Only ask the user clarifying questions if absolutely essential to proceed.
 - For each data point you gather, **cite the direct official link** where the information was verified.
 - Continue sourcing and confirming information step-by-step until all tickers and their respective entry/exit points, per the user's strategy, are documented.
+- Hard limit: collect AT MOST 5 tickers. Stop gathering once you have 5 valid tickers.
 - **Throughout, display reasoning before any conclusions:** for each ticker and point, first detail the steps or logic (including search terms, source selection, and analysis) that led you there, then present the confirmed result at the end of the entry.
 - When—after reviewing and reasoning—you've collected all necessary information to proceed, **announce explicitly:**  
   “Ready to finalize plan”.

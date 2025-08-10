@@ -3,8 +3,8 @@ import OpenAI from "openai";
 
 export type PlanItem = {
   ticker: string;
-  entry: { at: string | null; source: string; url: string };
-  exit: { at: string | null; source: string; url: string };
+  entry: { at: string; source?: string; url?: string };
+  exit: { at: string; source?: string; url?: string };
 };
 export type Plan = PlanItem[];
 
@@ -101,7 +101,7 @@ PlanItem schema:
 Rules:
 - Keep only tickers with BOTH entry and exit legs.
 - Prefer precise timestamps from the official source.
-- Max 20 items.
+- Max 5 items. If there are more, keep the most representative 5.
 `;
 
 // Stage 2: Structure unstructured transcript/content into OFFICIAL_EVENT_TOOL
@@ -123,7 +123,6 @@ export async function structurePlanFromTranscript(
       },
     ],
   });
-  console.log("response", response);
   const outputs: any[] = response.output ?? [];
   // Accept either 'function_call' (Responses API) or legacy 'tool_call'
   const fnCallItem = outputs.find(
